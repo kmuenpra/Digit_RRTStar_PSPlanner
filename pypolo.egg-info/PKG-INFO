@@ -1,0 +1,40 @@
+Metadata-Version: 2.1
+Name: pypolo
+Version: 0.0.1
+Summary: PyPolo: A Python Library for Robotic Information Gathering
+Home-page: https://github.com/weizhe-chen/pypolo
+Author: Weizhe Chen
+Author-email: wchen.robotics@outlook.com
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: matplotlib
+Requires-Dist: hydra-core
+Requires-Dist: bezier
+Requires-Dist: gpytorch
+Provides-Extra: dev
+Requires-Dist: isort; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: pyright; extra == "dev"
+Provides-Extra: test
+Requires-Dist: pytest; extra == "test"
+
+# Terrain Mapping with Attentive Kernel
+
+## Installation
+
+```
+conda create -n pypolo python=3.8
+conda activate pypolo  
+pip install -r requirements.txt
+pip install -e .
+```
+
+## Get Started
+
+```bash
+cd experiments
+python main.py kernel=rbf
+python main.py kernel=ak
+```

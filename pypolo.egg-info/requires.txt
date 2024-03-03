@@ -1,0 +1,12 @@
+matplotlib
+hydra-core
+bezier
+gpytorch
+
+[dev]
+isort
+black
+pyright
+
+[test]
+pytest

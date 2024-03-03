@@ -1,0 +1,40 @@
+seed: 0
+
+# [xmin, xmax, ymin, ymax]
+env_extent: [-11.0, 11.0, -11.0, 11.0]
+# environment extent should be slightly larger than task extent
+# otherwise, the robot might go out of boundary and cannot access matrix value
+task_extent: [-10.0, 10.0, -10.0, 10.0]
+# evaluate the model's prediction in this evaluation grid
+eval_grid: [30, 30]
+
+# sensor
+sensing_rate: 0.5  # Hz
+noise_scale: 1.0  # Observational Gaussian white noise scale
+
+# robot
+control_rate: 10.0  # Hz
+max_lin_vel: 0.5  # maximum linear velocity
+max_ang_vel: 1.0  # maximum angular velocity
+goal_radius: 0.1  # the goal is considered reached in this radius
+
+# experiment setup
+num_bezier_points: 50  # number of bezier control points for pilot survey
+num_train_steps: 10  # number of training iterations for each decision epoch
+max_num_samples: 800  # maximum number of samples the robot allowed to collect
+# plot the robot every this many steps. 0 means no sampling animation.
+plot_robot_interval: 10
+
+# algorithmic components
+defaults:
+  - model: gpr
+  - kernel: ak
+  - planner: max_entropy
+  - override hydra/hydra_logging: disabled  
+  - override hydra/job_logging: disabled  
+  - _self_
+
+hydra:  
+  output_subdir: null  
+  run:  
+    dir: .

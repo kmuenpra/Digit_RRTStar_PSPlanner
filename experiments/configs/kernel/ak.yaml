@@ -1,0 +1,5 @@
+name: AK
+dim_hidden: 10  # number of hidden units in two-hidden-layer TanH MLP
+dim_output: 10  # number of output units / primitive lengthscales / membership dim.
+min_lengthscale: 0.1
+max_lengthscale: 0.5

@@ -1,0 +1,5 @@
+name: GPR
+noise_var: 1.0
+# only add one sample after receiving this many samples
+# 0 means no sparsification
+num_sparsification: 0 
