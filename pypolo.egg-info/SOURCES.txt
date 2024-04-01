@@ -174,8 +174,10 @@ pypolo/models/__init__.py
 pypolo/models/base_model.py
 pypolo/models/gp/__init__.py
 pypolo/models/gp/gpr_model.py
+pypolo/models/gp/gpr_model_NNKernel.py
 pypolo/models/gp/kernels/__init__.py
 pypolo/models/gp/kernels/attentive_kernel.py
+pypolo/models/gp/kernels/neural_network_kernel.py
 pypolo/planners/AStarPlanner.py
 pypolo/planners/__init__.py
 pypolo/planners/base_planner.py
@@ -183,6 +185,7 @@ pypolo/planners/bezier_planner.py
 pypolo/planners/global_RRTStar_planner.py
 pypolo/planners/lawnmower_planner.py
 pypolo/planners/local_RRTStar_PSPlanner.py
+pypolo/planners/local_RRTStar_PSPlanner_backup.py
 pypolo/planners/max_entropy_planner.py
 pypolo/robots/__init__.py
 pypolo/robots/base_robot.py
@@ -195,9 +198,11 @@ pypolo/sensors/__init__.py
 pypolo/sensors/base_sensor.py
 pypolo/sensors/lidar_sensor.py
 pypolo/sensors/point_sensor.py
+pypolo/utils/PathEvaluator.py
 pypolo/utils/__init__.py
 pypolo/utils/evaluator.py
 pypolo/utils/visualizer.py
+pypolo/utils/visualizer_8plots.py
 torch/_VF.py
 torch/__config__.py
 torch/__future__.py

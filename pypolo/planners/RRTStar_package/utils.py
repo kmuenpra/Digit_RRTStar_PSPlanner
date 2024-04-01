@@ -40,6 +40,14 @@ class Utils:
                            [ox + w + delta, oy + h + delta],
                            [ox - delta, oy + h + delta]]
             obs_list.append(vertex_list)
+            
+        delta = 0.01
+        for (ox, oy, w, h) in self.obs_boundary:
+            vertex_list = [[ox - delta, oy - delta],
+                           [ox + w + delta, oy - delta],
+                           [ox + w + delta, oy + h + delta],
+                           [ox - delta, oy + h + delta]]
+            obs_list.append(vertex_list)
 
         return obs_list
 
@@ -149,9 +157,14 @@ class Utils:
                     and 0 <= node.y - (y - delta) <= h + 2 * delta:
                 return True
 
+        # for (x, y, w, h) in self.obs_boundary:
+        #     if 0 <= node.x - (x - delta) <= w + 2 * delta \
+        #             and 0 <= node.y - (y - delta) <= h + 2 * delta:
+        #         return True
+            
         for (x, y, w, h) in self.obs_boundary:
-            if 0 <= node.x - (x - delta) <= w + 2 * delta \
-                    and 0 <= node.y - (y - delta) <= h + 2 * delta:
+            if 0 <= node.x - (x) <= w \
+                    and 0 <= node.y - (y) <= h:
                 return True
             
         for path in self.obstacle:
@@ -179,11 +192,11 @@ class Utils:
             p2 = polygon[i % num_vertices]
     
             # Check if the point is above the minimum y coordinate of the edge
-            if y > min(p1[1], p2[1]):
+            if y + self.delta > min(p1[1], p2[1]):
                 # Check if the point is below the maximum y coordinate of the edge
-                if y <= max(p1[1], p2[1]):
+                if y - self.delta <= max(p1[1], p2[1]):
                     # Check if the point is to the left of the maximum x coordinate of the edge
-                    if x <= max(p1[0], p2[0]):
+                    if x - self.delta <= max(p1[0], p2[0]):
                         # Calculate the x-intersection of the line connecting the point to the edge
                         x_intersection = (y - p1[1]) * (p2[0] - p1[0]) / (p2[1] - p1[1]) + p1[0]
     

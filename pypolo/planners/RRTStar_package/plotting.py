@@ -52,7 +52,7 @@ class Plotting:
                     (ox, oy), w, h,
                     edgecolor='black',
                     facecolor='gray',
-                    fill=True
+                    fill=True,
                 )
             )
 
@@ -61,8 +61,7 @@ class Plotting:
                 patches.Circle(
                     (ox, oy), r,
                     edgecolor='black',
-                    facecolor='gray',
-                    fill=True
+                    facecolor='red', alpha=0.3
                 )
             )
             

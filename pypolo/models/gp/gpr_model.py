@@ -8,6 +8,8 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 from pypolo.scalers import MinMaxScaler, StandardScaler
 
 from .. import BaseModel
+from ...sensors.point_sensor import  PointSensor
+
 
 
 class GPyTorchModel(gpytorch.models.ExactGP):
@@ -25,6 +27,7 @@ class GPyTorchModel(gpytorch.models.ExactGP):
 class GPRModel(BaseModel):
     def __init__(
         self,
+        cfg,
         x_train: np.ndarray,
         y_train: np.ndarray,
         x_scalar: MinMaxScaler,
@@ -47,6 +50,14 @@ class GPRModel(BaseModel):
         self._init_model_evidence()
         self._init_optimizer()
         self.batch_size = batch_size
+        
+        self.getMatEntries = PointSensor(
+                rate=1.0,
+                matrix=np.zeros(cfg.eval_grid),
+                env_extent=cfg.task_extent,
+                noise_scale=0,
+                rng=np.random.RandomState(42)
+        )
 
     @torch.no_grad()
     def add_data(self, x_new: np.ndarray, y_new: np.ndarray) -> None:

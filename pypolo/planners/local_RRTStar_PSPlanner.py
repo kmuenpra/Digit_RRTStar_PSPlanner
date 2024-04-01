@@ -38,6 +38,7 @@ class Node:
         self.x = n[0]
         self.y = n[1]
         self.parent = None
+        self.has_child = False
         
     def print_node_chain(self, node=None, counter=0, show_parents=True):
         
@@ -91,6 +92,7 @@ class LocalRRTStar(BasePlanner):
 
         self.plotting = plotting.Plotting(x_start, x_goal)
         self.utils = utils.Utils()
+        self.utils.delta = 0.15
 
 
         #------------------ Set up environment -----------------
@@ -124,7 +126,7 @@ class LocalRRTStar(BasePlanner):
         self.step_len_max = 0.3
         self.step_len_min = 0.1
         self.step_len = min(step_len, self.step_len_max) #step 
-        self.goal_radius = self.step_len_min
+        self.goal_radius = self.step_len_max
         
         #-----------------------------------------------------
 
@@ -161,12 +163,26 @@ class LocalRRTStar(BasePlanner):
                 
                 #Check if path from nearet tree node to the new node is safe
                 if node_new and not self.utils.is_collision(node_near, node_new, delta=obstacle_margin):
+                    
+                    #The branching node has new child -> set to True
+                    node_near.has_child = True
+                    
                     # neighbor_index = self.find_near_neighbor(node_new) #find other neighbor node near the new node
                     self.vertex.append(node_new) #append new node to the vertex
 
                     # if neighbor_index:
                     #     self.choose_parent(node_new, neighbor_index) #reassign the parent of the new node, if there are closer neighbor
                     #     self.rewire(node_new, neighbor_index) #if new node is closer to the start than neighbor, make the new node a parent of that neighbor
+                else:
+                    
+                    step_l_node , heading_node  = self.get_distance_and_angle(node_near, node_new)
+                    
+                    #Try smaller step length ,if the desired one doesn't work
+                    if step_l_node > self.step_len_min + 0.03:
+                        
+                        admiss_neighbor = Node((node_near.x + self.step_len_min * np.cos(heading_node),  node_near.y + self.step_len_min * np.sin(heading_node)))
+                        admiss_neighbor.parent = node_near
+                        admissible_node_list.append(admiss_neighbor)
                         
                 #if reach within 2m radius of the goal position, end the tree search
                 if math.hypot(node_new.x - self.s_goal.x, node_new.y - self.s_goal.y) <= self.goal_radius:
@@ -183,8 +199,9 @@ class LocalRRTStar(BasePlanner):
         self.get_interpolant_param() #generate self.m_list and self.c_list
                 
         #Check to if any nodes in optimal path can be rewired together
-        for i in np.flip(np.arange(0, len(self.path_vertex) - 1)):
-            self.rewire_path(s_start_index=i)
+        if len(self.path_vertex) > 3:
+            for i in np.flip(np.arange(0, len(self.path_vertex) - 1)):
+                self.rewire_path(s_start_index=i)
             
     
     def reset_tree(self, start:tuple=None, goal:tuple=None):
@@ -199,7 +216,11 @@ class LocalRRTStar(BasePlanner):
         self.vertex = [self.s_start]
         self.path_vertex = []
         
-    
+    def track_path(self, path, vertex, path_vertex):
+        self.path = path
+        self.vertex = vertex
+        self.path_vertex = path_vertex
+        
     def rewire_path(self, s_start_index):   
         
         #Rewiring
@@ -236,7 +257,7 @@ class LocalRRTStar(BasePlanner):
             self.get_interpolant_param() #generate self.m_list and self.c_list
             
         
-        if i == s_start_index or i == len(self.path_vertex) - 2:
+        if (i == s_start_index) or (i >= len(self.path_vertex) - 2):
             return
         else:
             self.rewire_path(s_start_index=i)
@@ -632,10 +653,15 @@ class LocalRRTStar(BasePlanner):
         dist_list = [math.hypot(n.x - self.s_goal.x, n.y - self.s_goal.y) for n in self.vertex]
         node_index = [i for i in range(len(dist_list)) if dist_list[i] <= self.goal_radius] #<= self.step_len
 
+        # print("Search Goal - Local:", node_index)
+
+
         if len(node_index) > 0:
             cost_list = [dist_list[i] + self.cost(self.vertex[i]) for i in node_index
                             if not self.utils.is_collision(self.vertex[i], self.s_goal)]
-            return node_index[int(np.argmin(cost_list))]
+            
+            if len(cost_list) > 0:
+                return node_index[int(np.argmin(cost_list))]
 
         return len(self.vertex) - 1
 
@@ -679,6 +705,14 @@ class LocalRRTStar(BasePlanner):
 
     @staticmethod
     def nearest_neighbor(node_list, n):
+        
+        dist_list = [math.hypot(nd.x - n.x, nd.y - n.y)  for nd in node_list]
+        sorted_dist_indices = sorted(range(len(dist_list)), key=lambda i: dist_list[i])
+        
+        for i in sorted_dist_indices:
+            if not node_list[i].has_child:
+                return node_list[i]
+            
         return node_list[int(np.argmin([math.hypot(nd.x - n.x, nd.y - n.y)
                                         for nd in node_list]))]
 
@@ -742,5 +776,99 @@ class LocalRRTStar(BasePlanner):
             self.plotting.animation(self.vertex, self.path, "rrt*, total Iter. = " + str(self.k), )
         else:
             self.plotting.plot_grid("Plain Environment")
+            
+    def update_obs(self, obs_cir, obs_bound, obs_rec, obstacles):
+
+            # #Convert Irregular Shape into multiple circles
+            # n_clusters = 4
+            # for path in obstacles:
+            #     centers, radii = get_clusters(path.vertices, n_clusters)
+            #     for i in range(len(centers)):
+            #         circ = centers[i].tolist()
+            #         circ.append(radii[i])
+                    
+            #         obs_cir.append(circ)
+                    
+            # obs_cir = remove_inner_circles(obs_cir)
+            
+        
+            self.obs_circle = obs_cir
+            self.obs_boundary = obs_bound
+            self.obs_rectangle = obs_rec
+            # self.obstacle = obstacles
+            
+            self.env.obs_circle = self.obs_circle
+            self.env.obs_boundary = self.obs_boundary
+            self.env.obs_rectangle = self.obs_rectangle
+            # self.env.obstacle = obstacles
+            
+            self.plotting.obs_circle = self.obs_circle
+            self.plotting.obs_boundary = self.obs_boundary
+            self.plotting.obs_rectangle = self.obs_rectangle
+            # self.plotting.obstacle = obstacles
+            
+            self.utils.obs_circle = self.obs_circle
+            self.utils.obs_boundary = self.obs_boundary
+            self.utils.obs_rectangle = self.obs_rectangle
+            # self.utils.obstacle = obstacles
+            
+#------------------------------------------------------------
+
+from sklearn.cluster import KMeans
+from matplotlib.patches import Circle
+
+def get_clusters(points, n_clusters):
+    # Perform K-means clustering
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    kmeans.fit(points)
+    cluster_centers = kmeans.cluster_centers_
+    labels = kmeans.labels_
+
+    # Plot the points and circles
+    # plt.scatter(points[:, 0], points[:, 1], c=labels, cmap='viridis')
+    
+    centers = []
+    radii = []
+    
+    for i in range(n_clusters):
+        cluster_points = points[labels == i]
+        cluster_center = cluster_centers[i]
+        
+        # Calculate the radius of the circle that covers the cluster points
+        radius = np.max(np.linalg.norm(cluster_points - cluster_center, axis=1))
+        
+        # Plot the circle
+        # circle = Circle(cluster_center, radius, color='red', alpha=0.2)
+        # plt.gca().add_patch(circle)
+        
+        centers.append(cluster_center)
+        radii.append(radius)
+
+    # plt.xlabel('X')
+    # plt.ylabel('Y')
+    # plt.title('Clustered Points with Circles')
+    # plt.axis('equal')
+    # plt.show()
+
+    return centers, radii
+
+def remove_inner_circles(circles):
+    # Create a list to store circles that are not fully contained within any other circle
+    valid_circles = []
+    
+    # Iterate over each circle
+    for i in range(len(circles)):
+        is_valid = True
+        for j in range(len(circles)):
+            if i != j:
+                # Check if circle i is fully contained within circle j
+                distance = np.linalg.norm(np.array(circles[i][:2]) - np.array(circles[j][:2]))
+                if distance + circles[i][2] <= circles[j][2] + 0.6:
+                    is_valid = False
+                    break
+        if is_valid:
+            valid_circles.append(circles[i])
+
+    return valid_circles
             
 

@@ -55,6 +55,7 @@ class Evaluator:
 
     def compute_metrics(self, mean, std):
         self.mean = mean
+        # print("compute_metric mean", mean)
         self.std = std
         self.abs_error = np.fabs(mean - self.eval_outputs)
 

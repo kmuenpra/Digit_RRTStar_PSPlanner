@@ -17,17 +17,18 @@ class DigitRobot(BaseRobot):
         self.foot_deviate = 0.03012
         
         #Initialize Apex State
-        self.apex_x    =   start[0]     
-        self.apex_y    =   start[1] + self.state_deviate
+        self.heading_c =   start[2]
+        self.apex_x    =   start[0] - self.state_deviate*np.sin(self.heading_c)
+        self.apex_y    =   start[1] + self.state_deviate*np.cos(self.heading_c)
         self.apex_z    =   1.01
         self.wp_c_x    =   start[0] 
         self.wp_c_y    =   start[1]
         self.wp_n_x    =   0.0
         self.wp_n_y    =   0.0   
         self.vapex     =   0.15 #0.25
-        self.heading_c =   start[2]
-        self.foot_x    =   self.apex_x
-        self.foot_y    =   self.apex_y + self.foot_deviate
+        
+        self.foot_x    =   self.apex_x - self.foot_deviate*np.sin(self.heading_c)
+        self.foot_y    =   self.apex_y  + self.foot_deviate*np.cos(self.heading_c)
         self.foot_z    =   0.0      
         self.step_l , self.dheading, self.dz  = 0.0,0.0,0.0
         self.dz        =   0.0
@@ -39,7 +40,8 @@ class DigitRobot(BaseRobot):
                         "foot_position":[np.array([self.foot_x,self.foot_y])],
                         "sagittal":[],
                         "lateral":[],
-                        "frame":[]}
+                        "frame":[],
+                        "heading":[self.heading_c]}
         
         self.path = np.array([]) #Path to track
         
@@ -53,12 +55,20 @@ class DigitRobot(BaseRobot):
         
         self.path = np.array(path)
         self.path = self.path[:len(self.path) - 1] #Remove the goal
-                
+        
+        print("Local Path Tracked! (digit_robot.py): ", self.path)
+        
         self.wp_c_x    =   self.path[0][0] 
-        self.wp_c_y    =   self.path[0][1]  
-        self.wp_n_x    =   self.path[1][0]   
-        self.wp_n_y    =   self.path[1][1]       
-        self.step_l , self.dheading, self.dz  = self.compute_action(model, (self.wp_n_x, self.wp_n_y), (self.wp_c_x, self.wp_c_y))       
+        self.wp_c_y    =   self.path[0][1]
+        
+        if len(self.path) > 1:
+            self.wp_n_x    =   self.path[1][0]   
+            self.wp_n_y    =   self.path[1][1]       
+            self.step_l , self.dheading, self.dz  = self.compute_action(model, (self.wp_n_x, self.wp_n_y), (self.wp_c_x, self.wp_c_y))
+        else:
+            self.wp_n_x    =   self.wp_c_x  
+            self.wp_n_y    =   self.wp_c_y    
+            self.step_l , self.dheading, self.dz = 0,0,0
         
         self.history["waypoint_track"] = []   
         self.history["waypoint_track"].append(np.array([self.wp_c_x, self.wp_c_y]))
@@ -70,6 +80,8 @@ class DigitRobot(BaseRobot):
         
         #this return a 2d prediction value
         z_foot_next, _ = model.predict(next)
+        print("z_foot_next",z_foot_next)
+        print("z_foot_next",z_foot_next.shape)
         
         #high level action
         dz = z_foot_next[0][0] - self.foot_z
@@ -81,13 +93,15 @@ class DigitRobot(BaseRobot):
     def update_state(self) -> None:
         #Update Robot State
         self.state = np.hstack([self.apex_x, self.apex_y, self.heading_c])
-
-            
-    # def hard_update_state(self, vapex=1.5) -> None:
-    #     self.vapex = vapex
         
         
-    def step(self, model, num_targets) -> None:
+    def step(self, model, num_targets, log_data_flag=False, verbose=True) -> None:
+        
+        if verbose:
+            print("\n---------- Action Command ---------")
+            print("A_HL: step_l", self.step_l)
+            print("A_HL: dz", self.dz)
+            print("A_HL: dtheta", np.rad2deg(self.dheading))
         
         #Track reference frame
         self.frame = (self.wp_c_x, self.wp_c_y, self.heading_c)
@@ -120,9 +134,8 @@ class DigitRobot(BaseRobot):
         self.history["foot_position"].append(np.array([self.foot_x, self.foot_y]))
         self.history["sagittal"].append(sag)
         self.history["lateral"].append(lat)
-        
-        print("current apex state: ", (self.apex_x, self.apex_y))
-        
+        self.history["heading"].append(self.heading_c)
+                
         # #Replanning every 4 steps
         # a = np.where((self.path_ordered == [self.wp_c_x, self.wp_c_y]).all(1))[0][0] #Check that it is not the last step
         
@@ -159,111 +172,88 @@ class DigitRobot(BaseRobot):
             self.wp_n_x    =   self.path[a + 1][0]
             self.wp_n_y    =   self.path[a + 1][1]
             self.step_l , self.dheading, self.dz  = self.compute_action(model, (self.wp_n_x, self.wp_n_y), (self.wp_c_x, self.wp_c_y))
+        else:
+            self.step_l , self.dheading, self.dz = 0,0,0 #goal is reached
         
         #Clear Goal after reaching each waypoints
         self.goals = self.goals[1:]
                 
-        print("---------- Digit's PSP ---------")
-        print("PSP waypoint", (wp_x_n, wp_y_n, wp_z_n))
-        print("current waypoint", (self.wp_c_x, self.wp_c_y))
-        print("next waypoint", (self.wp_n_x, self.wp_n_y))
-        print("vapex", self.vapex)
-        print("step_l", self.step_l)
-        print("dz", self.dz)
-        print("next dtheta", np.rad2deg(self.dheading))
-        print("PSP current dtheta", dheading)
-        # print("current head", np.rad2deg(self.heading_c))
-        print("PSP current head", heading_n)
-        print("PSP t1", t1)
-        print("PSP t2", t2)
-        print("stance", self.stance)
-        print("-----------------------------------")
+        if verbose and  a < len(self.path) - 1:
+            print("---------- Digit's PSP Results ---------")
+            print("apex state after stepping: ", (self.apex_x, self.apex_y))
+            print("current waypoint [PSP]", (wp_x_n, wp_y_n, wp_z_n))
+            # print("current waypoint", (self.wp_c_x, self.wp_c_y))
+            print("next waypoint", (self.wp_n_x, self.wp_n_y))
+            print("vapex", self.vapex)
+            # print("PSP output 'step_length': ", step_length)
+            # print("previous dtheta [PSP]", dheading)
+            # print("current head", np.rad2deg(self.heading_c))
+            print("PSP current head", heading_n)
+            print("PSP t1", t1)
+            print("PSP t2", t2)
+            print("stance", self.stance)
+            print("----------")
+            print("next A_HL: step_l", self.step_l)
+            print("next A_HL: dz", self.dz)
+            print("next A_HL: dtheta", np.rad2deg(self.dheading))
+            print("-----------------------------------\n")
+        
+        replanning_local = False
+        
+
+        
+        
+        
+        #----------------------
+        #GP Prediction
+        
+        foot_xy = np.array([self.foot_x, self.foot_y])
+        foot_z_pred, foot_z_var = model.predict(foot_xy)
+        
+        wp_xy = np.array([wp_x_n, wp_y_n])
+        wp_z_pred, wp_z_var = model.predict(wp_xy)
+        
+        # print("foot_z_pred",foot_z_pred)
+        # print("wp_z_pred",wp_z_pred)
+    
+        
+        
+        #---------------------
+        #Actual values
+        
+        foot_z_actual = self.sensor.get(np.array([self.foot_x]), np.array([self.foot_y]))
+        wp_z_actual = self.sensor.get(np.array([wp_x_n]), np.array([wp_y_n]))
+        
+        # print("foot_z_actual",foot_z_actual)
+        # print("wp_z_actual",wp_z_actual)
+        
+        #------------------
+        #Model Error
+        
+        #Label:      apex_x,    apex_y,   apex_z,   foot_x,    foot_y, foot_z_psp, foot_z_pred, foot_z_actual, wp_x_n, wp_y_n, wp_z_psp, wp_z_pred, wp_z_actual, heading_n, step_l,     dheading, dz,  
         
         #Collect new data
-        location, observations = self.sensor.sense(self.state, self.heading_c, num_targets=num_targets)
+        if a < len(self.path) - 4:
+            location, observations, replanning_local = self.sensor.sense(model, self.state, self.heading_c, ray_tracing=True, num_targets=num_targets, candidate_point=self.path[(a+1):(a+5)])
+        else:
+            location, observations, replanning_local = self.sensor.sense(model, self.state, self.heading_c, ray_tracing=True, num_targets=num_targets)
+
+        
         self.sampled_locations.append(location)
         self.sampled_observations.append(observations)
+        
+        if log_data_flag or replanning_local:
             
-    # def step(self, model, num_targets) -> None:
+            # return replanning_local, np.array([self.apex_x, self.apex_y, self.apex_z, dl_switch, ds_switch, step_length, step_width, step_time, dheading, heading_n, \
+            # t1, t2, opt_vn, self.foot_x, self.foot_y, wp_x_n, wp_y_n, wp_z_n, self.foot_z, dz, s_switch_g, l_switch_g])
             
-    #     #Get current height
-    #     self.apex_z, terrain_uncertainty = model.predict(self.state[:2])
-        
-    #     #Get height change action
-    #     waypoint_height, action_uncertainty = model.predict(np.array([self.wp_n_x, self.wp_n_y]))
-    #     self.dz = waypoint_height - self.apex_z
+            return replanning_local, \
+                np.array([self.apex_x, self.apex_y, self.apex_z, dl_switch, ds_switch, step_length, step_width, step_time, dheading, heading_n, \
+            t1, t2, opt_vn, self.foot_x, self.foot_y, wp_x_n, wp_y_n, wp_z_n, self.foot_z, dz, s_switch_g, l_switch_g]), \
+                np.array([dl_switch, ds_switch, step_length, step_width, step_time, self.dheading, t1, t2, opt_vn, self.foot_x, self.foot_y, wp_x_n, wp_y_n, s_switch_g, l_switch_g]), \
+                    np.array([self.apex_x, self.apex_y, self.apex_z, self.foot_x, self.foot_y, self.foot_z, foot_z_pred[0][0], foot_z_var[0][0], foot_z_actual[0], wp_x_n, wp_y_n, wp_z_n, wp_z_pred[0][0], wp_z_var[0][0], wp_z_actual[0], heading_n, step_length, dheading, dz])
+                    
             
-    #     try:
-    #         self.apex_x, self.apex_y, self.apex_z, self.foot_x, self.foot_y, self.foot_z, self.vapex, sag, sag_dot, lat, lat_dot = \
-    #         apex_Vel_search(self.apex_x, self.apex_y, self.apex_z, self.wp_c_x, self.wp_c_y, self.vapex, self.foot_x, self.foot_y, \
-    #                     self.foot_z, np.rad2deg(self.heading_c), self.step_l, np.rad2deg(self.dheading), self.dz, self.stance, stop = False, start_flag = True)
-    #     except UnboundLocalError:
-    #         print("Digit could not find optimal apex velocity to reach the next waypoint.")
-    #         self.apex_z, self.foot_z, self.vapex = 0, 0, 0.1
-                
-    #         #Need to check again
-    #         self.apex_x = self.wp_c_x + (1-self.stance) * -(self.state_deviate * np.sin(self.heading_c)) + (self.stance) * (self.state_deviate * np.sin(self.heading_c))
-    #         self.foot_x = self.wp_c_x + (1-self.stance) * -(self.foot_deviate * np.sin(self.heading_c)) + (self.stance) * (self.foot_deviate * np.sin(self.heading_c))
-    #         self.apex_y = self.wp_c_y + (1-self.stance) * (self.state_deviate * np.cos(self.heading_c)) + (self.stance) * -(self.state_deviate * np.cos(self.heading_c))
-    #         self.foot_y = self.wp_c_y + (1-self.stance) * (self.foot_deviate * np.cos(self.heading_c)) + (self.stance) * -(self.foot_deviate * np.cos(self.heading_c))
-    #         sag = []
-    #         lat = []
-
-    #     #Update heading 
-    #     self.heading_c = self.heading_c + self.dheading #np.arctan2(self.apex_y - prev_apex[1], self.apex_x - prev_apex[0])
-    #     self.state = np.array([self.apex_x, self.apex_y, self.heading_c])
-
-    #     #Update Stance
-    #     self.stance = 0 if self.stance else 1
-        
-    #     #Update the current waypoint
-    #     self.wp_c_x = self.wp_n_x
-    #     self.wp_c_y = self.wp_n_y 
-            
-    #     #Append new information
-    #     self.history["apex_state"].append(np.array([self.apex_x, self.apex_y]))
-    #     self.history["waypoint_track"].append(np.array([self.wp_c_x, self.wp_c_y]))
-    #     self.history["foot_position"].append(np.array([self.foot_x, self.foot_y]))
-    #     self.history["sagittal"].append(sag)
-    #     self.history["lateral"].append(lat)
-        
-    #     #Replan
-    #     # self.start = np.array([self.apex_x, self.apex_y])
-    #     # self.plan_astar()
-    #     # self.wp_n_y    =   self.path[1][1] 
-    #     # self.wp_n_x    =   self.path[1][0]
-        
-    #     #Reach goal
-    #     self.goals = self.goals[1:]
-        
-    #     #Update action toward next waypoint    
-    #     print((self.wp_c_x , self.wp_c_y))
-    #     self.wp_n_x    =   self.planner.get_next_waypoint((self.wp_c_x , self.wp_c_y))[0]
-    #     self.wp_n_y    =   self.planner.get_next_waypoint((self.wp_c_x , self.wp_c_y))[1]
-    #     self.step_l , self.dheading  = self.compute_action((self.wp_n_x, self.wp_n_y), (self.wp_c_x, self.wp_c_y))
-        
-    #     #Get height change action
-    #     waypoint_height, action_uncertainty = model.predict(np.array([self.wp_n_x, self.wp_n_y]))
-    #     self.dz = waypoint_height - self.apex_z
-        
-    #     #Next frame
-    #     self.frame = (self.wp_c_x, self.wp_c_y, self.heading_c)
-    #     self.history["frame"].append(self.frame)
-        
-    #     print("---------- Digit's PSP ---------")
-    #     print("next waypoint", (self.wp_n_x, self.wp_n_y))
-    #     print("vapex", self.vapex)
-    #     print("step_l", self.step_l)
-    #     print("dtheta", np.rad2deg(self.dheading))
-    #     print("dz", self.dz)
-    #     print("current head", np.rad2deg(self.heading_c))
-    #     print("current height", self.apex_z)
-        
-    #     #Collect new data
-    #     location, observations = self.sensor.sense(self.state, self.heading_c, num_targets=num_targets)
-    #     self.sampled_locations.append(location)
-    #     self.sampled_observations.append(observations)
-                
             
             
     #------------------ Phase Space Planner ---------------------------
@@ -467,7 +457,7 @@ def ForwardProp(p_f, p, p_dot, h, aq, eps, backward_num):
 
 def apex_Vel_search(apex_x, apex_y, apex_z, wp_x, wp_y, vapex, foot_x, foot_y, 
                     foot_z, heading_c, step_l, dheading, dz, stance, stop, start_flag):
-    v_inc = np.arange(0.1,0.3,0.01)
+    v_inc = np.arange(0.1,0.8,0.01) #np.arange(0.1,0.3,0.01)
     h = 1.01
     cost = 10000
     #cost weight
@@ -482,7 +472,7 @@ def apex_Vel_search(apex_x, apex_y, apex_z, wp_x, wp_y, vapex, foot_x, foot_y,
     t_d = 0.45
     Sw_d = 0.45
 
-
+    # opt_vn = 0.1
 
     for vapex_n in v_inc:
         if(step_l == 0.37*0.3839):
@@ -494,6 +484,50 @@ def apex_Vel_search(apex_x, apex_y, apex_z, wp_x, wp_y, vapex, foot_x, foot_y,
         s2, s2_foot, l2, l2_foot, step_time, wp_x_n, wp_y_n, wp_z_n, step_length, step_width, t1, t2, ds_switch, dl_switch, s_switch, l_switch, sag, lat =\
             phase_space_planner (apex_x, apex_y, apex_z, wp_x, wp_y, vapex, vapex_n, foot_x, foot_y, foot_z, heading_c, step_l, dheading, dz, stance, start_flag)
         # if (t1 != 0.0 and t2 !=0.0):
+        
+        # if(stance == 1):
+        #     if(dheading < 5) and (dheading > -5):
+        #         new_cost = cy1*np.abs(-y1_d - l2) + cy2*(np.abs(-y2_d - (l2_foot-l2))) + ct*(np.abs(t_d - step_time)) + c_sw*(np.abs(Sw_d - np.abs(step_width)))
+        #         if(new_cost < cost):
+        #             cost = new_cost
+        #             opt_vn = vapex_n
+        #     # elif(dheading > -0.1):
+        #     #     new_cost = cy1*np.abs(y1_d - l2) + cy2*(np.abs(y2_d - (l2_foot-l2))) + ct*(np.abs(t_d - step_time)) + c_sw*(np.abs(Sw_d - np.abs(step_width)))
+        #     #     if(new_cost < cost):
+        #     #         cost = new_cost
+        #     #         opt_vn = vapex_n
+        #     else:
+        #         new_cost = 0*cy1*np.abs(-y1_d - l2) + cy2*(np.abs(-y2_d - (l2_foot-l2))) + ct*(np.abs(0.35 - step_time)) + 2*c_sw*(np.abs((Sw_d-0.05) - np.abs(step_width))) #+ ct*(np.abs(t_d - t))
+        #         if(new_cost < cost):
+        #             cost = new_cost
+        #             if (vapex_n > 0.25):
+        #                 opt_vn = 0.25
+        #             else:
+        #                 opt_vn = vapex_n
+
+        # else:
+        #     if(dheading < 5) and (dheading > -5):
+        #         new_cost = cy1*np.abs(y1_d - l2) + cy2*(np.abs(y2_d - (l2_foot-l2))) + ct*(np.abs(t_d - step_time)) + c_sw*(np.abs(Sw_d - np.abs(step_width)))
+        #         if(new_cost < cost):
+        #             cost = new_cost
+        #             opt_vn = vapex_n
+        #     # elif(dheading > -0.1):
+        #     #     new_cost = cy1*np.abs(y1_d - l2) + cy2*(np.abs(y2_d - (l2_foot-l2))) + ct*(np.abs(t_d - step_time)) + c_sw*(np.abs(Sw_d - np.abs(step_width)))
+        #     #     if(new_cost < cost):
+        #     #         cost = new_cost
+        #     #         opt_vn = vapex_n
+        #     else:
+        #         new_cost = 0*cy1*np.abs(y1_d - l2) + cy2*(np.abs(y2_d - (l2_foot-l2))) + ct*(np.abs(0.35 - step_time)) + 2*c_sw*(np.abs((Sw_d-0.05) - np.abs(step_width))) #+ ct*(np.abs(t_d - t))
+        #         if(new_cost < cost):
+        #             cost = new_cost
+        #             if (vapex_n > 0.25):
+        #                 opt_vn = 0.25
+        #             else:
+        #                 opt_vn = vapex_n
+                        
+        
+        # OLDEN DAYS CODE
+        
         if(stance == 1):
             if(dheading == 0):
                 new_cost = cy1*np.abs(-y1_d - l2) + cy2*(np.abs(-y2_d - (l2_foot-l2))) + ct*(np.abs(t_d - step_time)) + c_sw*(np.abs(Sw_d - np.abs(step_width)))
@@ -504,7 +538,7 @@ def apex_Vel_search(apex_x, apex_y, apex_z, wp_x, wp_y, vapex, foot_x, foot_y,
                 new_cost = 0*cy1*np.abs(-y1_d - l2) + cy2*(np.abs(-y2_d - (l2_foot-l2))) + ct*(np.abs(0.35 - step_time)) + 2*c_sw*(np.abs((Sw_d-0.05) - np.abs(step_width))) #+ ct*(np.abs(t_d - t))
                 if(new_cost < cost):
                     cost = new_cost
-                    if (vapex_n > 0.2):
+                    if (vapex_n > 0.25): #vapex_n > 0.5
                         opt_vn = 0.2
                     else:
                         opt_vn = vapex_n
@@ -518,7 +552,7 @@ def apex_Vel_search(apex_x, apex_y, apex_z, wp_x, wp_y, vapex, foot_x, foot_y,
                 new_cost = 0*cy1*np.abs(y1_d - l2) + cy2*(np.abs(y2_d - (l2_foot-l2))) + ct*(np.abs(0.35 - step_time)) + 2*c_sw*(np.abs((Sw_d-0.05) - np.abs(step_width))) #+ ct*(np.abs(t_d - t))
                 if(new_cost < cost):
                     cost = new_cost
-                    if (vapex_n > 0.2):
+                    if (vapex_n > 0.25): #vapex_n > 0.5
                         opt_vn = 0.2
                     else:
                         opt_vn = vapex_n

@@ -1,5 +1,6 @@
 import numpy as np
 import random
+from scipy.stats import norm
 
 from . import BaseSensor
 
@@ -19,8 +20,10 @@ class LidarSensor(BaseSensor):
         self.perception_angle = perception_angle
         
     
-    def sense(self, states: np.ndarray, global_heading, ray_tracing = False, num_targets = 20) -> np.ndarray:
+    def sense(self, model, states: np.ndarray, global_heading, ray_tracing = False, num_targets = 20, candidate_point=None) -> np.ndarray:
         # noise_free = set()  # Using a set to avoid repeated samples
+        
+        replanning_local = False
         
         states = np.atleast_2d(states)
         
@@ -49,8 +52,52 @@ class LidarSensor(BaseSensor):
         point_y = np.delete(point_y, index_to_delete)
                 
         locations = np.vstack([point_x[:], point_y[:]]).T
-            
-        noise_free = self.get(locations[:,0], locations[:,1])
-        observations = self.rng.normal(loc=np.array(list(noise_free)), scale=self.noise_scale)
         
-        return locations, observations.reshape(-1, 1)
+        noise_free = self.get(locations[:,0], locations[:,1])
+        observations = self.rng.normal(loc=np.array(list(noise_free)), scale=self.noise_scale).reshape(-1, 1)
+        
+        # z_pred, z_std = model.predict(locations)
+        # z_quantile = self.find_quantile(value=observations, mean_pred=z_pred, std_pred=z_std)
+        
+        # if len(np.where(z_quantile < 0.05)[0]) > 0:
+        #         replanning_local = True
+        
+        # # Check for prediction error for the next two point
+        # if candidate_point is not None:
+        #     candidate_point = np.atleast_2d(candidate_point)
+        #     z_measure = self.get(candidate_point[:, 0], candidate_point[:, 1]).reshape(-1, 1)
+        #     z_pred, z_std = model.predict(candidate_point)
+        #     z_quantile = self.find_quantile(value=z_measure, mean_pred=z_pred, std_pred=z_std)    
+            
+        #     print("LIDAR sensor")
+        #     print("measure", z_measure)
+        #     print("pred", z_pred)
+        #     print("quantile", z_quantile)
+            
+        #     if len(np.where(z_quantile < 0.1)[0]) > 0:
+                
+        #         replanning_local = True
+                
+            # print(locations)
+            # print(observations)
+
+            # locations = np.vstack([locations, candidate_point])
+            # observations = np.vstack([observations, z_measure])
+                
+        
+        return locations, observations, replanning_local
+
+
+    def find_quantile(self, value, mean_pred, std_pred):
+        
+        
+        # Calculate the standardized value
+        z_score = (value - mean_pred) / std_pred
+        
+        # Calculate the cumulative probability
+        cumulative_prob = norm.cdf(z_score)
+        
+        # Convert cumulative probability to quantile
+        quantile = 1 - cumulative_prob  # 1 - CDF gives the tail probability
+        
+        return quantile

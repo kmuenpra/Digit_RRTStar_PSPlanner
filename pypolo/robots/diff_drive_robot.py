@@ -31,7 +31,7 @@ class DiffDriveRobot(BaseRobot):
             self.state[2] += 2 * np.pi
             
     #For LidarSensor
-    def step_with_heading(self, current_heading, num_targets) -> None:
+    def step(self, current_heading, num_targets) -> None:
         action, dist = self.compute_action()
         if dist < self.goal_radius:
             self.goals = self.goals[1:]
@@ -39,8 +39,7 @@ class DiffDriveRobot(BaseRobot):
         self.timer += self.control_dt
         if self.timer > self.sensor.dt:
             
-            location, observations = self.sensor.sense(self.state, current_heading, num_targets=num_targets)
+            location, observations, _ = self.sensor.sense(model=None, states=self.state[:2], global_heading=current_heading, ray_tracing = False, num_targets=num_targets)
             self.sampled_locations.append(location)
             self.sampled_observations.append(observations)
             self.timer = 0.0
-
